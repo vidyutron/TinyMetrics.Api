@@ -29,16 +29,19 @@ To handle more data than one machine can store, we split the data across `Shard0
 *   **Consistent Hashing**: We built a Hash Ring with Virtual Nodes to ensure:
     *   **Even Distribution**: Data is spread fairly across shards.
     *   **Stability**: Adding new shards in the future requires moving only a fraction of the data ($1/N$).
+    *   **Performance**: Shard resolution uses Binary Search (O(log N)) for high-speed lookups.
+    *   **Virtual Nodes**: We use 200 virtual nodes per physical shard to minimize data skew and "hot spots".
 
 ## 🛠️ Code Structure
 
 The current codebase represents **Phase 4**.
 
 *   **`TinyMetrics.Api/Program.cs`**: Configures the API and registers services. It implements the "Ingest" endpoint which writes to the Staging table.
-*   **`TinyMetrics.Api/ShardProvider.cs`**: Implements **Consistent Hashing**. It maps a `TenantId` to a specific database connection string using a virtual node ring.
+*   **`TinyMetrics.Api/ShardProvider.cs`**: Implements **Consistent Hashing**. It maps a `TenantId` to a specific database connection string using a virtual node ring. It uses **Binary Search** for fast O(log N) resolution.
+*   **`TinyMetrics.Api/ShardRebalancer.cs`**: Implements the **Rebalancing Logic**. It handles data migration between shards when the topology changes.
 *   **`TinyMetrics.Api/ShardIngestWorker.cs`**: A background service that:
     1.  Reads raw batches from `Events_Staging`.
-    2.  Deserializes and groups data by the target Shard.
+    2.  Deserializes and groups data by the target Shard (handling **Poison Pills** gracefully).
     3.  Inserts data into specific Shard databases in parallel.
     4.  Marks staging data as processed.
 *   **`TinyMetrics.Console/`**: A load-testing client that simulates 50,000 requests across 5 different tenants.
